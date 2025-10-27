@@ -1,0 +1,73 @@
+import time
+import pytest
+from page_objects.user_page import UserPage
+from playwright.sync_api import Page
+
+
+BASE_URL = "https://opensource-demo.orangehrmlive.com/" # replace with your instance
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "admin"
+
+
+@pytest.fixture(scope='function')
+def login(page: Page):
+page.goto(BASE_URL)
+# Login (OrangeHRM default fields)
+page.fill('input[name="txtUsername"]', ADMIN_USERNAME)
+page.fill('input[name="txtPassword"]', ADMIN_PASSWORD)
+page.click('button:has-text("Login")')
+# Wait for main landing
+page.wait_for_selector('text=Dashboard')
+return page
+
+
+
+
+def test_navigate_to_admin(login: Page):
+up = UserPage(login)
+up.goto_admin()
+assert login.is_visible('text=User Management')
+
+
+
+
+def test_add_search_edit_delete_user(login: Page):
+page = login
+up = UserPage(page)
+up.goto_admin()
+
+
+timestamp = str(int(time.time()))[-5:]
+username = f"autouser_{timestamp}"
+employee = "Odis Adalwin" # change to an employee that exists in your instance
+password = "Pass@1234"
+
+
+# Add user
+up.add_user(username=username, employee=employee, role='ESS', status='Enabled', password=password)
+
+
+# Search user
+rows = up.search_user(username)
+assert len(rows) >= 1, "Created user not found in search results"
+
+
+# Edit user - change username
+up.open_first_result_for_edit()
+new_username = username + "_e"
+up.update_username(new_username)
+
+
+# Validate update via search
+rows = up.search_user(new_username)
+assert len(rows) >= 1, "Updated user not found"
+
+
+# Delete user
+up.delete_first_result()
+
+
+# Validate deletion
+rows = up.search_user(new_username)
+# Depending on the app it may show "No Records Found" or zero rows
+assert len(rows) == 0 or page.is_visible('text=No Records Found')
